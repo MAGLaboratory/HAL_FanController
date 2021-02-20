@@ -1,0 +1,23 @@
+{
+	"name": "fan",
+	"description": "Controls the VFD through modbus for fan things",
+	"boot_check_list": {
+		"Daisy CPU Temp": ["cat /sys/class/thermal/thermal_zone0/temp | tr -d '\\n'"],
+		"Daisy Uptime": ["uptime | tr -d '\\n'"],
+		"Daisy Local IP": ["/sbin/ifconfig eth0 | grep inet | awk '{ print $2 }' | cut -d: -f2 | tr -d '\\n'"],
+		"Daisy Disk Usage": ["df -h | grep -v tmpfs | tail -n +2"],
+		"Daisy Memory Usage": ["free -h"],
+		"Daisy uname": ["uname -a | tr -d '\\n'"],
+		"Daisy ifconfig_eth0": ["/sbin/ifconfig", "eth0"]
+	},
+	"long_checkup_freq": 10,
+	"long_checkup_leng": 5,
+	"pidfile": "/tmp/hfd.pid",
+	"mqtt_broker": "hal",
+	"mqtt_port": 1883,
+	"mqtt_timeout": 60,
+	"modbus_port": "/dev/ttyUSB0",
+	"modbus_address": 1,
+	"modbus_baud": 115200,
+	"modbus_tries": 3
+}
