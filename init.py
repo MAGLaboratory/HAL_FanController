@@ -9,7 +9,7 @@ if __name__ != "__main__":
 
 my_path = os.path.dirname(os.path.abspath(__file__))
 config = open(my_path + "/hfc_config.json", "r")
-daemon = HDCDaemon.from_json(config.read())
+daemon = HFCDaemon.from_json(config.read())
 config.close()
 
 if len(sys.argv) == 2:

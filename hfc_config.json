@@ -28,11 +28,6 @@
 			"register": 1
 		},
 		{
-			"name": "Drive_Status",
-			"fmt": "{0b}",
-			"register": 5
-		},
-		{
 			"name": "Output_Frequency",
 			"fmt": "{0d}",
 			"register": 6
