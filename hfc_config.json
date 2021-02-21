@@ -16,6 +16,53 @@
 	"mqtt_broker": "hal",
 	"mqtt_port": 1883,
 	"mqtt_timeout": 60,
+	"modbus_checkups":[
+		{
+			"name": "Drive_Control", 
+			"fmt": "{0b}",
+			"register": 0
+		},
+		{
+			"name": "Set_Point",
+			"fmt": "{0d}",
+			"register": 1
+		},
+		{
+			"name": "Drive_Status",
+			"fmt": "{0b}",
+			"register": 5
+		},
+		{
+			"name": "Output_Frequency",
+			"fmt": "{0d}",
+			"register": 6
+		},
+		{
+			"name": "Motor_Current",
+			"fmt": "{0d}",
+			"register": 7
+		},
+		{
+			"name": "Motor_Power",
+			"fmt": "{0d}",
+			"register": 9
+		},
+		{
+			"name": "DC_Bus_V",
+			"fmt": "{0d}",
+			"register": 22
+		},
+		{
+			"name": "Drive_HS_Temp",
+			"fmt": "{0d}",
+			"register": 23
+		},
+		{
+			"name": "Drive_Internal_Temp",
+			"fmt": "{0d}",
+			"register": 38
+		}
+	],
 	"modbus_port": "/dev/ttyUSB0",
 	"modbus_address": 1,
 	"modbus_baud": 115200,

@@ -17,6 +17,14 @@ class HFCDaemon(Daemon):
         h_fanController.run()
 
 
+@dataclass_json
+@dataclass
+class Modbus_Checkup:
+    name: str
+    fmt: str
+    register: int
+
+
 class HFC(mqtt.Client):
     """Controls the fan on the roof"""
 
@@ -30,6 +38,7 @@ class HFC(mqtt.Client):
         boot_check_list: Dict[str, List[str]]
         long_checkup_freq: int
         long_checkup_length: int
+        modbus_checkups: List[Modbus_Checkup]
         modbus_port: str
         modbus_address: int
         modbus_baud: int
@@ -94,10 +103,10 @@ class HFC(mqtt.Client):
     def renew(self):
         checks = {}
         if self.checkup = True
-            for checkup in checkups:
+            for check_name, check_register in self.data.modbus_checkups:
                 for try_ in range(0,self.data.modbus_tries)
                     try:
-                        checks[checkup.name] = instr.read_register(checkup.num)
+                        checks[check_name] = instr.read_register(check_register)
                         break
                     except IOError:
                         print("Failed to write to instrument")
@@ -108,12 +117,12 @@ class HFC(mqtt.Client):
             if(self.pings % self.data.long_checkup_freq == 0):
                 self.pings = 0
                 long_checkup_count = 0
-                for check_name in self.data.boot_check_list:
+                for check_name, check_command in self.data.boot_check_list:
                     long_checkup_count += 1
                     if long_checkup_count > self.data.long_checkup_leng:
                         break
                     checks[check_name] = subprocess.check_output(
-                            self.data.boot_check_list[check_name],
+                            check_command,
                             shell=True
                     ).decode('utf-8')
 
