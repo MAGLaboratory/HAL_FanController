@@ -62,11 +62,31 @@ class HFC(mqtt.Client):
     def on_connect(self, client, userdata, flags, rc):
         print("Connected: " + str(rc))
         self.subscribe("reporter/checkup_req")
+        self.subscribe("display/drive_run")
+        self.subscribe("display/drive_reset")
+        self.subscribe("display/drive_speed")
 
     def on_message(self, client, userdata, message):
-        if message == "reporter/checkup_req":
+        if message.topic == "reporter/checkup_req":
             print("Checkup received.")
             self.checkup = True
+        if message.topic == "display/drive_speed":
+            print("New Speed Received: " + message.payload)
+            try:
+                self.speed = int(message.payload)
+                self.new_speed = True
+            except ValueError:
+                print("Error converting string to integer for speed")
+        if message.topic == "display/drive_run":
+            if (message.payload.lower() == "true" or message.payload == "1"):
+                self.drive_run = True
+            else:
+                self.drive_run = False
+        if message.topic == "display/drive_reset":
+            if (message.payload.lower() == "true" or message.payload == "1"):
+                self.drive_reset = True
+            else:
+                self.drive_reset = False
 
     def bootup(self):
         self.notify_bootup()
@@ -79,6 +99,7 @@ class HFC(mqtt.Client):
         self.checkup = False
         self.drive_run = False
         self.drive_reset = False
+        self.max_speed = (int)(self.instr.read_register(128)/5)
 
     def signal_handler(self, signum, frame):
         print("Caught a deadly signal!")
@@ -113,7 +134,7 @@ class HFC(mqtt.Client):
                 for try_ in range(self.data.modbus_tries):
                     try:
                         status_word = self.instr.read_register(5)
-                        self.drive_ready = bool(status_word & (1<<5))
+                        self.drive_ready = bool(status_word & (1<<6))
                         self.drive_tripped = bool(status_word & (1<<1))
                         self.drive_running = bool(status_word & (1<<0))
                         self.drive_error = status_word >> 8
@@ -123,6 +144,18 @@ class HFC(mqtt.Client):
                             self.running = False
                             self.exiting = True
 
+                if (self.checkup or self.new_speed) == True:
+                    for try_ in range (self.data.modbus_tries):
+                        try:
+                            self.instr.write_register(1, self.speed, signed=True)
+                            self.new_speed = False
+                        except IOError:
+                            print("Failed to communicate with instrument")
+                            traceback.print_exc()
+                            if try_ == self.data.modbus_tries - 1:
+                                self.running = False
+                                self.exiting = True
+
                 if self.checkup == True:
                     for check_name, check_register in self.data.modbus_checkups:
                         for try_ in range(self.data.modbus_tries):
@@ -130,7 +163,7 @@ class HFC(mqtt.Client):
                                 checks[check_name] = self.instr.read_register(check_register)
                                 break
                             except IOError:
-                                print("Failed to write to instrument")
+                                print("Failed to communicate with instrument")
                                 traceback.print_exc()
                                 if try_ == self.data.modbus_tries - 1:
                                     self.running = False
