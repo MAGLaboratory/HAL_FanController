@@ -8,6 +8,9 @@ from typing import *
 from multitimer import MultiTimer
 import minimalmodbus
 
+# This is some kind of fan controller targeted at the invertek e3
+# I guess it's a sort of MQTT bridge?
+
 class HFCDaemon(Daemon):
     def run(self):
         h_fanController = HFC()
@@ -37,10 +40,11 @@ class HFC(mqtt.Client):
     class data:
         name: str
         description: str
+        default_speed: int
         boot_check_list: Dict[str, List[str]]
         long_checkup_freq: int
         long_checkup_leng: int
-        modbus_checkups: List[Modbus_Checkup]
+        modbus_checkups: Dict[str, int]
         modbus_port: str
         modbus_address: int
         modbus_baud: int
@@ -60,36 +64,49 @@ class HFC(mqtt.Client):
             self.running = False;
 
     def on_connect(self, client, userdata, flags, rc):
-        print("Connected: " + str(rc))
         self.subscribe("reporter/checkup_req")
         self.subscribe("display/drive_run")
         self.subscribe("display/drive_reset")
         self.subscribe("display/drive_speed")
+        print("Connected: " + str(rc))
 
     def on_message(self, client, userdata, message):
         if message.topic == "reporter/checkup_req":
             print("Checkup received.")
             self.checkup = True
+
         if message.topic == "display/drive_speed":
-            print("New Speed Received: " + message.payload)
+            print("New Speed Received: ", end='')
+            decoded = message.payload.decode('utf-8')
+            print(decoded)
             try:
-                self.speed = int(message.payload)
+                received_speed = int(decoded)
+                if (received_speed > self.max_speed):
+                    raise ValueError("New speed above max speed")
+
+                if (received_speed < -self.max.speed):
+                    raise ValueError("New speed below minimum reverse speed")
+                
                 self.new_speed = True
-            except ValueError:
-                print("Error converting string to integer for speed")
+                self.speed = received_speed
+            except ValueError as err:
+                print(err)
+                print("Error converting string \"" + decoded + "\" to for speed")
+
         if message.topic == "display/drive_run":
-            if (message.payload.lower() == "true" or message.payload == "1"):
+            print("Run command received: ", end='')
+            decoded = message.payload.decode('utf-8')
+            print(decoded)
+            if (decoded.lower() == "true" or decoded == "1"):
                 self.drive_run = True
             else:
                 self.drive_run = False
+
         if message.topic == "display/drive_reset":
-            if (message.payload.lower() == "true" or message.payload == "1"):
-                self.drive_reset = True
-            else:
-                self.drive_reset = False
+            print("Reset received.")
+            self.drive_reset = True
 
     def bootup(self):
-        self.notify_bootup()
         self.pings = 0
 
         signal.signal(signal.SIGINT, self.signal_handler)
@@ -100,6 +117,10 @@ class HFC(mqtt.Client):
         self.drive_run = False
         self.drive_reset = False
         self.max_speed = (int)(self.instr.read_register(128)/5)
+        self.new_speed = False
+        self.speed = self.data.default_speed
+
+        self.notify_bootup()
 
     def signal_handler(self, signum, frame):
         print("Caught a deadly signal!")
@@ -116,6 +137,8 @@ class HFC(mqtt.Client):
 
     def notify_bootup(self):
         boot_checks = {}
+
+        boot_checks["Max_Speed"] = self.max_speed;
 
         print("Bootup:")
 
@@ -157,7 +180,7 @@ class HFC(mqtt.Client):
                                 self.exiting = True
 
                 if self.checkup == True:
-                    for check_name, check_register in self.data.modbus_checkups:
+                    for check_name, check_register in self.data.modbus_checkups.items():
                         for try_ in range(self.data.modbus_tries):
                             try:
                                 checks[check_name] = self.instr.read_register(check_register)
@@ -177,7 +200,8 @@ class HFC(mqtt.Client):
                     if(self.pings % self.data.long_checkup_freq == 0):
                         self.pings = 0
                         long_checkup_count = 0
-                        for check_name, check_command in self.data.boot_check_list:
+                        # encapsulate in the trying
+                        for check_name, check_command in self.data.boot_check_list.items():
                             long_checkup_count += 1
                             if long_checkup_count > self.data.long_checkup_leng:
                                 break
@@ -192,7 +216,7 @@ class HFC(mqtt.Client):
                 # renew the on command
                 for try_ in range(self.data.modbus_tries):
                     try:
-                        control_word = bool(self.drive_run and self.drive_ready) & (bool(self.drive_reset) << 2)
+                        control_word = bool(self.drive_run and self.drive_ready) & (not bool(self.drive_reset) << 2)
                         self.drive_reset = False
                         self.instr.write_register(0, control_word)
                     except IOError:
@@ -210,6 +234,7 @@ class HFC(mqtt.Client):
     
 
     def run(self):
+        timer = MultiTimer(interval=1, function = self.renew)
         while True:
             self.running = True
             while self.running:
@@ -220,7 +245,6 @@ class HFC(mqtt.Client):
                             self.data.modbus_address)
                     self.instr.serial.baudrate = self.data.modbus_baud
                     self.bootup()
-                    timer = MultiTimer(interval=1, function = self.renew)
                     timer.start()
 
                     while self.running:

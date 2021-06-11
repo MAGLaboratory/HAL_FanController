@@ -1,6 +1,7 @@
 {
 	"name": "fan",
 	"description": "Controls the VFD through modbus for fan things",
+	"default_speed": 300,
 	"boot_check_list": {
 		"Daisy CPU Temp": ["cat /sys/class/thermal/thermal_zone0/temp | tr -d '\\n'"],
 		"Daisy Uptime": ["uptime | tr -d '\\n'"],
@@ -16,50 +17,20 @@
 	"mqtt_broker": "hal",
 	"mqtt_port": 1883,
 	"mqtt_timeout": 60,
-	"modbus_checkups":[
-		{
-			"name": "Drive_Control", 
-			"fmt": "{0b}",
-			"register": 0
-		},
-		{
-			"name": "Set_Point",
-			"fmt": "{0d}",
-			"register": 1
-		},
-		{
-			"name": "Output_Frequency",
-			"fmt": "{0d}",
-			"register": 6
-		},
-		{
-			"name": "Motor_Current",
-			"fmt": "{0d}",
-			"register": 7
-		},
-		{
-			"name": "Motor_Power",
-			"fmt": "{0d}",
-			"register": 9
-		},
-		{
-			"name": "DC_Bus_V",
-			"fmt": "{0d}",
-			"register": 22
-		},
-		{
-			"name": "Drive_HS_Temp",
-			"fmt": "{0d}",
-			"register": 23
-		},
-		{
-			"name": "Drive_Internal_Temp",
-			"fmt": "{0d}",
-			"register": 38
-		}
-	],
-	"modbus_port": "/dev/ttyUSB0",
+	"modbus_checkups": {
+		"Drive_Control": 0,
+		"Set_Point": 1,
+		"Output_Frequency": 6,
+		"Motor_Current": 7,
+		"Motor_Voltage": 42,
+		"Motor_Power": 9,
+		"DC_Bus_V": 22,
+		"Drive_HS_Temp": 23,
+		"Drive_Internal_Temp": 38,
+		"Max_Speed": 128
+	},
+	"modbus_port": "/dev/ttyS2",
 	"modbus_address": 1,
-	"modbus_baud": 115200,
+	"modbus_baud": 38400,
 	"modbus_tries": 3
 }
