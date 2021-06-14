@@ -126,6 +126,7 @@ class HFC(mqtt.Client):
                 self.drive_ready = bool(status_word & (1<<6))
                 self.drive_tripped = bool(status_word & (1<<1))
                 self.drive_running = bool(status_word & (1<<0))
+                self.last_drive_running = self.drive_running
                 self.drive_error = status_word >> 8
                 break
             except IOError:
@@ -173,6 +174,18 @@ class HFC(mqtt.Client):
         for try__ in range(3):
             try:
                 checks = {}
+                for try_ in range(self.data.modbus_tries):
+                    try:
+                        status_word = self.instr.read_register(5)
+                        self.drive_ready = bool(status_word & (1<<6))
+                        self.drive_tripped = bool(status_word & (1<<1))
+                        self.drive_running = bool(status_word & (1<<0))
+                        self.drive_error = status_word >> 8
+                        break
+                    except IOError:
+                        if try_ == self.data.modbus_tries - 1:
+                            self.running = False
+                            self.exiting = True
 
                 if (self.checkup or self.new_speed) == True:
                     for try_ in range (self.data.modbus_tries):
@@ -222,7 +235,7 @@ class HFC(mqtt.Client):
         
                     self.notify('checkup', checks)
                     self.checkup = False
-                elif self.drive_running == True:
+                elif self.last_drive_running == True:
                     for check_name, check_register in self.data.modbus_checkups.items():
                         for try_ in range(self.data.modbus_tries):
                             try:
@@ -244,18 +257,6 @@ class HFC(mqtt.Client):
                     checks["Drive_Error"] = self.drive_error
                     self.notify('running', checks)
 
-                for try_ in range(self.data.modbus_tries):
-                    try:
-                        status_word = self.instr.read_register(5)
-                        self.drive_ready = bool(status_word & (1<<6))
-                        self.drive_tripped = bool(status_word & (1<<1))
-                        self.drive_running = bool(status_word & (1<<0))
-                        self.drive_error = status_word >> 8
-                        break
-                    except IOError:
-                        if try_ == self.data.modbus_tries - 1:
-                            self.running = False
-                            self.exiting = True
         
                 # renew the on command
                 for try_ in range(self.data.modbus_tries):
@@ -269,6 +270,8 @@ class HFC(mqtt.Client):
                         if try_ == self.data.modbus_tries - 1:
                             self.running = False
                             self.exiting = True
+
+                self.last_drive_running = self.drive_running
                 break
             except:
                 traceback.print_exc()
