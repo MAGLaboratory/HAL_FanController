@@ -84,7 +84,7 @@ class HFC(mqtt.Client):
                 if (received_speed > self.max_speed):
                     raise ValueError("New speed above max speed")
 
-                if (received_speed < -self.max.speed):
+                if (received_speed < -self.max_speed):
                     raise ValueError("New speed below minimum reverse speed")
                 
                 self.new_speed = True
@@ -120,6 +120,19 @@ class HFC(mqtt.Client):
         self.new_speed = False
         self.speed = self.data.default_speed
 
+        for try_ in range(self.data.modbus_tries):
+            try:
+                status_word = self.instr.read_register(5)
+                self.drive_ready = bool(status_word & (1<<6))
+                self.drive_tripped = bool(status_word & (1<<1))
+                self.drive_running = bool(status_word & (1<<0))
+                self.drive_error = status_word >> 8
+                break
+            except IOError:
+                if try_ == self.data.modbus_tries - 1:
+                    self.running = False
+                    self.exiting = True
+
         self.notify_bootup()
 
     def signal_handler(self, signum, frame):
@@ -129,16 +142,22 @@ class HFC(mqtt.Client):
 
     def notify(self, path, params, retain=False):
         params['time'] = str(time.time())
-        print(params)
+        if (path != "running"):
+            print(params)
 
         topic = self.data.name + '/' + path
         self.publish(topic, json.dumps(params), retain=retain)
-        print("Published " + topic)
+        if (path != "running"):
+            print("Published " + topic)
 
     def notify_bootup(self):
         boot_checks = {}
 
         boot_checks["Max_Speed"] = self.max_speed;
+        boot_checks["Drive_Ready"] = self.drive_ready
+        boot_checks["Drive_Tripped"] = self.drive_tripped
+        boot_checks["Drive_Running"] = self.drive_running
+        boot_checks["Drive_Error"] = self.drive_error
 
         print("Bootup:")
 
@@ -154,18 +173,6 @@ class HFC(mqtt.Client):
         for try__ in range(3):
             try:
                 checks = {}
-                for try_ in range(self.data.modbus_tries):
-                    try:
-                        status_word = self.instr.read_register(5)
-                        self.drive_ready = bool(status_word & (1<<6))
-                        self.drive_tripped = bool(status_word & (1<<1))
-                        self.drive_running = bool(status_word & (1<<0))
-                        self.drive_error = status_word >> 8
-                        break
-                    except IOError:
-                        if try_ == self.data.modbus_tries - 1:
-                            self.running = False
-                            self.exiting = True
 
                 if (self.checkup or self.new_speed) == True:
                     for try_ in range (self.data.modbus_tries):
@@ -183,7 +190,10 @@ class HFC(mqtt.Client):
                     for check_name, check_register in self.data.modbus_checkups.items():
                         for try_ in range(self.data.modbus_tries):
                             try:
-                                checks[check_name] = self.instr.read_register(check_register)
+                                if check_name != "Max_Speed":
+                                    checks[check_name] = self.instr.read_register(check_register)
+                                else:
+                                    checks[check_name] = self.instr.read_register(check_register) / 5
                                 break
                             except IOError:
                                 print("Failed to communicate with instrument")
@@ -212,11 +222,45 @@ class HFC(mqtt.Client):
         
                     self.notify('checkup', checks)
                     self.checkup = False
+                elif self.drive_running == True:
+                    for check_name, check_register in self.data.modbus_checkups.items():
+                        for try_ in range(self.data.modbus_tries):
+                            try:
+                                if check_name != "Max_Speed":
+                                    checks[check_name] = self.instr.read_register(check_register)
+                                else:
+                                    checks[check_name] = self.instr.read_register(check_register) / 5
+                                break
+                            except IOError:
+                                print("Failed to communicate with instrument")
+                                traceback.print_exc()
+                                if try_ == self.data.modbus_tries - 1:
+                                    self.running = False
+                                    self.exiting = True
+
+                    checks["Drive_Ready"] = self.drive_ready
+                    checks["Drive_Tripped"] = self.drive_tripped
+                    checks["Drive_Running"] = self.drive_running
+                    checks["Drive_Error"] = self.drive_error
+                    self.notify('running', checks)
+
+                for try_ in range(self.data.modbus_tries):
+                    try:
+                        status_word = self.instr.read_register(5)
+                        self.drive_ready = bool(status_word & (1<<6))
+                        self.drive_tripped = bool(status_word & (1<<1))
+                        self.drive_running = bool(status_word & (1<<0))
+                        self.drive_error = status_word >> 8
+                        break
+                    except IOError:
+                        if try_ == self.data.modbus_tries - 1:
+                            self.running = False
+                            self.exiting = True
         
                 # renew the on command
                 for try_ in range(self.data.modbus_tries):
                     try:
-                        control_word = bool(self.drive_run and self.drive_ready) & (not bool(self.drive_reset) << 2)
+                        control_word = bool(self.drive_run and self.drive_ready) | (bool(self.drive_reset) << 2)
                         self.drive_reset = False
                         self.instr.write_register(0, control_word)
                     except IOError:
