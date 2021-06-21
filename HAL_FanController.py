@@ -116,13 +116,13 @@ class HFC(mqtt.Client):
         self.checkup = False
         self.drive_run = False
         self.drive_reset = False
-        self.max_speed = (int)(self.instr.read_register(128)/5)
         self.new_speed = False
-        self.speed = self.data.default_speed
 
         for try_ in range(self.data.modbus_tries):
             try:
                 status_word = self.instr.read_register(5)
+                self.max_speed = (int)(self.instr.read_register(128)/5)
+                self.speed = (int)(self.instr.read_register(1, signed=True)
                 self.drive_ready = bool(status_word & (1<<6))
                 self.drive_tripped = bool(status_word & (1<<1))
                 self.drive_running = bool(status_word & (1<<0))
@@ -203,10 +203,12 @@ class HFC(mqtt.Client):
                     for check_name, check_register in self.data.modbus_checkups.items():
                         for try_ in range(self.data.modbus_tries):
                             try:
-                                if check_name != "Max_Speed":
-                                    checks[check_name] = self.instr.read_register(check_register)
-                                else:
+                                if check_name == "Max_Speed":
                                     checks[check_name] = self.instr.read_register(check_register) / 5
+                                elif check_name == "Set_Point" or check_name == "Output_Frequency":
+                                    checks[check_name] = self.instr.read_register(check_register, signed=True)
+                                else:
+                                    checks[check_name] = self.instr.read_register(check_register)
                                 break
                             except IOError:
                                 print("Failed to communicate with instrument")
@@ -239,10 +241,12 @@ class HFC(mqtt.Client):
                     for check_name, check_register in self.data.modbus_checkups.items():
                         for try_ in range(self.data.modbus_tries):
                             try:
-                                if check_name != "Max_Speed":
-                                    checks[check_name] = self.instr.read_register(check_register)
-                                else:
+                                if check_name == "Max_Speed":
                                     checks[check_name] = self.instr.read_register(check_register) / 5
+                                elif check_name == "Set_Point" or check_name == "Output_Frequency":
+                                    checks[check_name] = self.instr.read_register(check_register, signed=True)
+                                else:
+                                    checks[check_name] = self.instr.read_register(check_register)
                                 break
                             except IOError:
                                 print("Failed to communicate with instrument")
