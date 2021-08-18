@@ -1,6 +1,6 @@
 import paho.mqtt.client as mqtt
 # import some cyberpunk / eurobeat band names
-import traceback, os, subprocess, time, json, signal
+import sys, traceback, os, subprocess, time, json, signal, inspect
 from daemon import Daemon
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -48,19 +48,25 @@ class HFC(mqtt.Client):
         modbus_port: str
         modbus_address: int
         modbus_baud: int
+        modbus_timeout: float
         modbus_tries: int
         mqtt_broker: str
         mqtt_port: int
         mqtt_timeout: int
+
+    def lineno(self):
+        return inspect.currentframe().f_back.f_lineno
 
     # overloaded MQTT funcitons from (mqtt.Client)
     def on_log(self, client, userdata, level, buff):
         if level != mqtt.MQTT_LOG_DEBUG:
             print(level)
             print(buff)
+            sys.stdout.flush()
         if level == mqtt.MQTT_LOG_ERR:
             print ("ERROR")
             traceback.print_exc()
+            sys.stdout.flush()
             self.running = False;
 
     def on_connect(self, client, userdata, flags, rc):
@@ -69,16 +75,29 @@ class HFC(mqtt.Client):
         self.subscribe("display/drive_reset")
         self.subscribe("display/drive_speed")
         print("Connected: " + str(rc))
+        sys.stdout.flush()
+
+    def on_disconnect(self, client, userdata, rc):
+        print("Disconnected: " + str(rc))
+        sys.stdout.flush()
+        self.running = False
 
     def on_message(self, client, userdata, message):
         if message.topic == "reporter/checkup_req":
             print("Checkup received.")
+            sys.stdout.flush()
             self.checkup = True
+            if (self.timer == None or self.timer._timer == None or self.timer._timer.isAlive() == False):
+                print("Timer invalid, starting new timer")
+                sys.stdout.flush()
+                self.timer = MultiTimer(interval=1, function = self.renew)
+                self.timer.start();
 
         if message.topic == "display/drive_speed":
             print("New Speed Received: ", end='')
             decoded = message.payload.decode('utf-8')
             print(decoded)
+            sys.stdout.flush()
             try:
                 received_speed = int(decoded)
                 if (received_speed > self.max_speed):
@@ -92,11 +111,13 @@ class HFC(mqtt.Client):
             except ValueError as err:
                 print(err)
                 print("Error converting string \"" + decoded + "\" to for speed")
+                sys.stdout.flush()
 
         if message.topic == "display/drive_run":
             print("Run command received: ", end='')
             decoded = message.payload.decode('utf-8')
             print(decoded)
+            sys.stdout.flush()
             if (decoded.lower() == "true" or decoded == "1"):
                 self.drive_run = True
             else:
@@ -104,6 +125,7 @@ class HFC(mqtt.Client):
 
         if message.topic == "display/drive_reset":
             print("Reset received.")
+            sys.stdout.flush()
             self.drive_reset = True
 
     def bootup(self):
@@ -122,7 +144,7 @@ class HFC(mqtt.Client):
             try:
                 status_word = self.instr.read_register(5)
                 self.max_speed = (int)(self.instr.read_register(128)/5)
-                self.speed = (int)(self.instr.read_register(1, signed=True)
+                self.speed = (int)(self.instr.read_register(1, signed=True))
                 self.drive_ready = bool(status_word & (1<<6))
                 self.drive_tripped = bool(status_word & (1<<1))
                 self.drive_running = bool(status_word & (1<<0))
@@ -130,6 +152,8 @@ class HFC(mqtt.Client):
                 self.drive_error = status_word >> 8
                 break
             except IOError:
+                print(self.lineno(), ": Failed to write to instrument, try: ", try_, "out of", self.data.modbus_tries - 1)
+                sys.stdout.flush()
                 if try_ == self.data.modbus_tries - 1:
                     self.running = False
                     self.exiting = True
@@ -137,19 +161,23 @@ class HFC(mqtt.Client):
         self.notify_bootup()
 
     def signal_handler(self, signum, frame):
-        print("Caught a deadly signal!")
         self.running = False
         self.exiting = True
+        print("Caught a deadly signal: ", signum, " ", frame, "!")
+        sys.stdout.flush()
 
     def notify(self, path, params, retain=False):
         params['time'] = str(time.time())
-        if (path != "running"):
+        # if (path != "running"):
+        if (True):
             print(params)
+            sys.stdout.flush()
 
         topic = self.data.name + '/' + path
         self.publish(topic, json.dumps(params), retain=retain)
         if (path != "running"):
             print("Published " + topic)
+            sys.stdout.flush()
 
     def notify_bootup(self):
         boot_checks = {}
@@ -171,6 +199,10 @@ class HFC(mqtt.Client):
         self.notify('bootup', boot_checks, retain=True)
 
     def renew(self):
+        if self.renewing == True:
+            return;
+        else:
+            self.renewing = True
         for try__ in range(3):
             try:
                 checks = {}
@@ -183,6 +215,8 @@ class HFC(mqtt.Client):
                         self.drive_error = status_word >> 8
                         break
                     except IOError:
+                        print(self.lineno(), ": Failed to read from instrument, try: ", try_ + 1, "out of", self.data.modbus_tries)
+                        sys.stdout.flush()
                         if try_ == self.data.modbus_tries - 1:
                             self.running = False
                             self.exiting = True
@@ -193,8 +227,9 @@ class HFC(mqtt.Client):
                             self.instr.write_register(1, self.speed, signed=True)
                             self.new_speed = False
                         except IOError:
-                            print("Failed to communicate with instrument")
-                            traceback.print_exc()
+                            print(self.lineno(), ": Failed to write to instrument, try: ", try_ + 1, "out of", self.data.modbus_tries)
+                            sys.stdout.flush()
+                            # traceback.print_exc()
                             if try_ == self.data.modbus_tries - 1:
                                 self.running = False
                                 self.exiting = True
@@ -211,8 +246,9 @@ class HFC(mqtt.Client):
                                     checks[check_name] = self.instr.read_register(check_register)
                                 break
                             except IOError:
-                                print("Failed to communicate with instrument")
-                                traceback.print_exc()
+                                print(self.lineno(), ": Check name:", check_name, " Failed to read from instrument, try: ", try_ + 1, "out of", self.data.modbus_tries)
+                                sys.stdout.flush()
+                                # traceback.print_exc()
                                 if try_ == self.data.modbus_tries - 1:
                                     self.running = False
                                     self.exiting = True
@@ -249,8 +285,9 @@ class HFC(mqtt.Client):
                                     checks[check_name] = self.instr.read_register(check_register)
                                 break
                             except IOError:
-                                print("Failed to communicate with instrument")
-                                traceback.print_exc()
+                                print(self.lineno(), ": Check name:", check_name, " Failed to read from instrument, try: ", try_ + 1, "out of", self.data.modbus_tries)
+                                sys.stdout.flush()
+                                # traceback.print_exc()
                                 if try_ == self.data.modbus_tries - 1:
                                     self.running = False
                                     self.exiting = True
@@ -268,9 +305,11 @@ class HFC(mqtt.Client):
                         control_word = bool(self.drive_run and self.drive_ready) | (bool(self.drive_reset) << 2)
                         self.drive_reset = False
                         self.instr.write_register(0, control_word)
-                    except IOError:
-                        print("Failed to write to instrument")
-                        traceback.print_exc()
+                    except IOError as err:
+                        print(self.lineno(), ": Failed to write to instrument, try: ", try_ + 1, "out of", self.data.modbus_tries)
+                        print("IOError: " + format(err))
+                        sys.stdout.flush()
+                        # traceback.print_exc()
                         if try_ == self.data.modbus_tries - 1:
                             self.running = False
                             self.exiting = True
@@ -278,16 +317,20 @@ class HFC(mqtt.Client):
                 self.last_drive_running = self.drive_running
                 break
             except:
-                traceback.print_exc()
+                print(self.lineno(), ": Failed to run renewal loop, try: ", try__ + 1, "out of", 3)
+                sys.stdout.flush()
+                # traceback.print_exc()
                 if try__ == 2:
                     self.running = False
                     self.exiting = True
-    
+
+        self.renewing = False
 
     def run(self):
-        timer = MultiTimer(interval=1, function = self.renew)
+        self.timer = MultiTimer(interval=1, function = self.renew)
         while True:
             self.running = True
+            self.renewing = False
             while self.running:
                 try:
                     self.connect(self.data.mqtt_broker, self.data.mqtt_port,
@@ -295,19 +338,23 @@ class HFC(mqtt.Client):
                     self.instr = minimalmodbus.Instrument(self.data.modbus_port, 
                             self.data.modbus_address)
                     self.instr.serial.baudrate = self.data.modbus_baud
+                    self.instr.serial.timeout = self.data.modbus_timeout
+                    print("Timeout: " + str(self.instr.serial.timeout))
                     self.bootup()
-                    timer.start()
+                    self.timer.start()
 
                     while self.running:
                         self.loop()
 
-                    timer.stop()
+                    self.timer.stop()
                     self.disconnect()
                 except:
                     traceback.print_exc()
-                    timer.stop()
+                    sys.stdout.flush()
+                    self.timer.stop()
 
                     pass
 
                 if self.exiting:
                     exit(0)
+        exit(1)

@@ -32,5 +32,6 @@
 	"modbus_port": "/dev/ttyS2",
 	"modbus_address": 1,
 	"modbus_baud": 38400,
-	"modbus_tries": 3
+	"modbus_timeout": 0.2,
+	"modbus_tries": 100
 }
