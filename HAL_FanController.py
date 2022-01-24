@@ -87,7 +87,7 @@ class HFC(mqtt.Client):
             print("Checkup received.")
             sys.stdout.flush()
             self.checkup = True
-            if (self.timer == None or self.timer._timer == None or self.timer._timer.isAlive() == False):
+            if (self.timer == None or self.timer._timer == None or self.timer._timer.is_alive() == False):
                 print("Timer invalid, starting new timer")
                 sys.stdout.flush()
                 self.timer = MultiTimer(interval=1, function = self.renew)
@@ -143,8 +143,8 @@ class HFC(mqtt.Client):
         for try_ in range(self.data.modbus_tries):
             try:
                 status_word = self.instr.read_register(5)
-                self.max_speed = (int)(self.instr.read_register(128)/5)
-                self.speed = (int)(self.instr.read_register(1, signed=True))
+                self.max_speed = int(self.instr.read_register(128)/5)
+                self.speed = int(self.instr.read_register(1, signed=True))
                 self.drive_ready = bool(status_word & (1<<6))
                 self.drive_tripped = bool(status_word & (1<<1))
                 self.drive_running = bool(status_word & (1<<0))
@@ -239,7 +239,7 @@ class HFC(mqtt.Client):
                         for try_ in range(self.data.modbus_tries):
                             try:
                                 if check_name == "Max_Speed":
-                                    checks[check_name] = self.instr.read_register(check_register) / 5
+                                    checks[check_name] = int(self.instr.read_register(check_register) / 5)
                                 elif check_name == "Set_Point" or check_name == "Output_Frequency":
                                     checks[check_name] = self.instr.read_register(check_register, signed=True)
                                 else:
