@@ -182,10 +182,10 @@ class HFC(mqtt.Client):
     def notify_bootup(self):
         boot_checks = {}
 
-        boot_checks["Max_Speed"] = self.max_speed;
+        boot_checks["Drive_Max_Speed"] = self.max_speed;
         boot_checks["Drive_Ready"] = self.drive_ready
         boot_checks["Drive_Tripped"] = self.drive_tripped
-        boot_checks["Drive_Running"] = self.drive_running
+        boot_checks["Drive_Run"] = self.drive_running
         boot_checks["Drive_Error"] = self.drive_error
 
         print("Bootup:")
@@ -238,9 +238,9 @@ class HFC(mqtt.Client):
                     for check_name, check_register in self.data.modbus_checkups.items():
                         for try_ in range(self.data.modbus_tries):
                             try:
-                                if check_name == "Max_Speed":
+                                if check_name == "Drive_Max_Speed":
                                     checks[check_name] = int(self.instr.read_register(check_register) / 5)
-                                elif check_name == "Set_Point" or check_name == "Output_Frequency":
+                                elif check_name == "Drive_Set_Fcy" or check_name == "Drive_Out_Fcy":
                                     checks[check_name] = self.instr.read_register(check_register, signed=True)
                                 else:
                                     checks[check_name] = self.instr.read_register(check_register)
@@ -255,7 +255,7 @@ class HFC(mqtt.Client):
 
                     checks["Drive_Ready"] = self.drive_ready
                     checks["Drive_Tripped"] = self.drive_tripped
-                    checks["Drive_Running"] = self.drive_running
+                    checks["Drive_Run"] = self.drive_running
                     checks["Drive_Error"] = self.drive_error
                     self.pings += 1
                     if(self.pings % self.data.long_checkup_freq == 0):
@@ -277,9 +277,9 @@ class HFC(mqtt.Client):
                     for check_name, check_register in self.data.modbus_checkups.items():
                         for try_ in range(self.data.modbus_tries):
                             try:
-                                if check_name == "Max_Speed":
-                                    checks[check_name] = self.instr.read_register(check_register) / 5
-                                elif check_name == "Set_Point" or check_name == "Output_Frequency":
+                                if check_name == "Drive_Max_Speed":
+                                    checks[check_name] = int(self.instr.read_register(check_register) / 5)
+                                elif check_name == "Drive_Set_Fcy" or check_name == "Drive_Out_Fcy":
                                     checks[check_name] = self.instr.read_register(check_register, signed=True)
                                 else:
                                     checks[check_name] = self.instr.read_register(check_register)
@@ -294,7 +294,7 @@ class HFC(mqtt.Client):
 
                     checks["Drive_Ready"] = self.drive_ready
                     checks["Drive_Tripped"] = self.drive_tripped
-                    checks["Drive_Running"] = self.drive_running
+                    checks["Drive_Run"] = self.drive_running
                     checks["Drive_Error"] = self.drive_error
                     self.notify('running', checks)
 

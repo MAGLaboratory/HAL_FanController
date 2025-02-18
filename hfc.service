@@ -1,0 +1,13 @@
+[Unit]
+Description=HAL Fan
+
+[Service]
+User=fan
+Group=fan
+Restart=on-failure
+RestartSec=30s
+EnvironmentFile=/home/fan/HAL_FanController/hfc.env
+ExecStart=/home/fan/HAL_FanController/HAL_FanController.py
+
+[Install]
+WantedBy=multi-user.target
