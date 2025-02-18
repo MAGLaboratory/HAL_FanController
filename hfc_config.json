@@ -19,15 +19,15 @@
 	"mqtt_timeout": 60,
 	"modbus_checkups": {
 		"Drive_Control": 0,
-		"Set_Point": 1,
-		"Output_Frequency": 6,
-		"Motor_Current": 7,
-		"Motor_Voltage": 42,
-		"Motor_Power": 9,
-		"DC_Bus_V": 22,
+		"Drive_Set_Fcy": 1,
+		"Drive_Out_Fcy": 6,
+		"Drive_Motor_Current": 7,
+		"Drive_Motor_Voltage": 42,
+		"Drive_Motor_Power": 9,
+		"Drive_DC_Bus_V": 22,
 		"Drive_HS_Temp": 23,
-		"Drive_Internal_Temp": 38,
-		"Max_Speed": 128
+		"Drive_Int_Temp": 38,
+		"Drive_Max_Speed": 128
 	},
 	"modbus_port": "/dev/ttyS2",
 	"modbus_address": 1,

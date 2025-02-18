@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import paho.mqtt.client as mqtt
 # import some cyberpunk / eurobeat band names
 import sys, traceback, os, subprocess, time, json, signal, inspect
@@ -11,15 +13,13 @@ import minimalmodbus
 # This is some kind of fan controller targeted at the invertek e3
 # I guess it's a sort of MQTT bridge?
 
-class HFCDaemon(Daemon):
-    def run(self):
-        h_fanController = HFC()
-        my_path = os.path.dirname(os.path.abspath(__file__))
-        config = open(my_path + "/hfc_config.json", "r")
+def main():
+    h_fanController = HFC()
+    my_path = os.path.dirname(os.path.abspath(__file__))
+    with open(my_path + "/hfc_config.json", "r") as config:
         h_fanController.data = HFC.data.from_json(config.read())
-        config.close()
 
-        h_fanController.run()
+    h_fanController.run()
 
 
 @dataclass_json
@@ -182,10 +182,10 @@ class HFC(mqtt.Client):
     def notify_bootup(self):
         boot_checks = {}
 
-        boot_checks["Max_Speed"] = self.max_speed;
+        boot_checks["Drive_Max_Speed"] = self.max_speed;
         boot_checks["Drive_Ready"] = self.drive_ready
         boot_checks["Drive_Tripped"] = self.drive_tripped
-        boot_checks["Drive_Running"] = self.drive_running
+        boot_checks["Drive_Run"] = self.drive_running
         boot_checks["Drive_Error"] = self.drive_error
 
         print("Bootup:")
@@ -238,9 +238,9 @@ class HFC(mqtt.Client):
                     for check_name, check_register in self.data.modbus_checkups.items():
                         for try_ in range(self.data.modbus_tries):
                             try:
-                                if check_name == "Max_Speed":
+                                if check_name == "Drive_Max_Speed":
                                     checks[check_name] = int(self.instr.read_register(check_register) / 5)
-                                elif check_name == "Set_Point" or check_name == "Output_Frequency":
+                                elif check_name == "Drive_Set_Fcy" or check_name == "Drive_Out_Fcy":
                                     checks[check_name] = self.instr.read_register(check_register, signed=True)
                                 else:
                                     checks[check_name] = self.instr.read_register(check_register)
@@ -255,7 +255,7 @@ class HFC(mqtt.Client):
 
                     checks["Drive_Ready"] = self.drive_ready
                     checks["Drive_Tripped"] = self.drive_tripped
-                    checks["Drive_Running"] = self.drive_running
+                    checks["Drive_Run"] = self.drive_running
                     checks["Drive_Error"] = self.drive_error
                     self.pings += 1
                     if(self.pings % self.data.long_checkup_freq == 0):
@@ -277,9 +277,9 @@ class HFC(mqtt.Client):
                     for check_name, check_register in self.data.modbus_checkups.items():
                         for try_ in range(self.data.modbus_tries):
                             try:
-                                if check_name == "Max_Speed":
-                                    checks[check_name] = self.instr.read_register(check_register) / 5
-                                elif check_name == "Set_Point" or check_name == "Output_Frequency":
+                                if check_name == "Drive_Max_Speed":
+                                    checks[check_name] = int(self.instr.read_register(check_register) / 5)
+                                elif check_name == "Drive_Set_Fcy" or check_name == "Drive_Out_Fcy":
                                     checks[check_name] = self.instr.read_register(check_register, signed=True)
                                 else:
                                     checks[check_name] = self.instr.read_register(check_register)
@@ -294,7 +294,7 @@ class HFC(mqtt.Client):
 
                     checks["Drive_Ready"] = self.drive_ready
                     checks["Drive_Tripped"] = self.drive_tripped
-                    checks["Drive_Running"] = self.drive_running
+                    checks["Drive_Run"] = self.drive_running
                     checks["Drive_Error"] = self.drive_error
                     self.notify('running', checks)
 
@@ -358,3 +358,6 @@ class HFC(mqtt.Client):
                 if self.exiting:
                     exit(0)
         exit(1)
+
+if __name__ == "__main__":
+    main()
